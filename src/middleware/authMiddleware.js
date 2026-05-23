@@ -1,5 +1,5 @@
-const jwt = require("jsonwebtoken");
-const db = require("../config/db");
+import jwt from "jsonwebtoken";
+import db from "../config/db.js";
 
 const protect = async (req, res, next) => {
   try {
@@ -38,6 +38,4 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  protect,
-};
+export { protect };

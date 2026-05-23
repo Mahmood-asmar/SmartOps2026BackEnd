@@ -1,7 +1,8 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const db = require("../config/db");
-const sendEmail = require("../utils/sendEmail");
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+import db from "../config/db.js";
+import sendEmail from "../utils/sendEmail.js";
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -137,7 +138,6 @@ const forgotPassword = async (req, res) => {
     }
 
     const otp = generateOtp();
-
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     await db.query(
@@ -150,14 +150,14 @@ const forgotPassword = async (req, res) => {
     );
 
     await sendEmail({
-  to: cleanEmail,
-  subject: "SmartOps Password Reset OTP",
-  text: `Your SmartOps password reset OTP is: ${otp}. This OTP will expire in 10 minutes.`,
-});
+      to: cleanEmail,
+      subject: "SmartOps Password Reset OTP",
+      text: `Your SmartOps password reset OTP is: ${otp}. This OTP will expire in 10 minutes.`,
+    });
 
-return res.json({
-  message: "OTP sent to your email successfully",
-});
+    return res.json({
+      message: "OTP sent to your email successfully",
+    });
   } catch (error) {
     console.error("Forgot password error:", error);
 
@@ -283,7 +283,7 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   register,
   login,
   getMe,
