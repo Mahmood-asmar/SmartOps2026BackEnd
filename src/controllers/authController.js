@@ -22,7 +22,7 @@ const generateOtp = () => {
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     const cleanName = name.trim();
     const cleanEmail = email.toLowerCase().trim();
@@ -40,8 +40,7 @@ const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const allowedRoles = ["admin", "employee", "client"];
-    const userRole = allowedRoles.includes(role) ? role : "client";
+    const userRole = "client";
 
     const [result] = await db.query(
       "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
