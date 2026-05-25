@@ -26,7 +26,7 @@ const registerDto = z.object({
     .min(6, "Password must be at least 6 characters"),
 
   // Temporary for testing. Later, normal register should always create client only.
-  role: z.enum(["admin", "employee", "client"]).optional(),
+ // role: z.enum(["admin", "employee", "client"]).optional(),
 });
 
 const loginDto = z.object({
