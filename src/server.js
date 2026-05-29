@@ -6,7 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import projectTemplateRoutes from "./routes/projectTemplateRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
-
+import taskRoutes from "./routes/taskRoutes.js";
 
 dotenv.config();
 
@@ -23,7 +23,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/project-templates", projectTemplateRoutes);
 app.use("/api/projects", projectRoutes);
-
+app.use("/api/tasks", taskRoutes);
 
 const PORT = process.env.PORT || 5000;
 
