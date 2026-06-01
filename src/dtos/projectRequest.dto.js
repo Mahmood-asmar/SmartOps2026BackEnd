@@ -12,6 +12,14 @@ const createProjectRequestDto = z.object({
 
   description: z.string().trim().optional(),
 
+  category: z
+    .string({
+      invalid_type_error: "Category must be a string",
+    })
+    .trim()
+    .max(255, "Category must be less than 255 characters")
+    .optional(),
+
   deadline: z.string().optional(),
 
   template_id: z.number().int().positive().nullable().optional(),

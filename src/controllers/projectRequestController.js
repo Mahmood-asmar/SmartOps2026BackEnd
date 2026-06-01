@@ -10,11 +10,13 @@ const getAllProjectRequests = async (req, res) => {
         client.email AS client_email,
         pr.project_name,
         pr.description,
+        pr.category,
         pr.deadline,
         pr.template_id,
         pt.name AS template_name,
         pr.status,
         pr.rejection_reason,
+        pr.project_id,
         pr.created_at,
         pr.reviewed_by,
         reviewer.name AS reviewed_by_name,
@@ -63,11 +65,13 @@ const getProjectRequestById = async (req, res) => {
         client.email AS client_email,
         pr.project_name,
         pr.description,
+        pr.category,
         pr.deadline,
         pr.template_id,
         pt.name AS template_name,
         pr.status,
         pr.rejection_reason,
+        pr.project_id,
         pr.created_at,
         pr.reviewed_by,
         reviewer.name AS reviewed_by_name,
@@ -111,7 +115,8 @@ const getProjectRequestById = async (req, res) => {
 
 const createProjectRequest = async (req, res) => {
   try {
-    const { project_name, description, deadline, template_id } = req.body;
+    const { project_name, description, category, deadline, template_id } =
+      req.body;
 
     if (template_id) {
       const [templates] = await db.query(
@@ -128,12 +133,13 @@ const createProjectRequest = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO project_requests
-       (client_id, project_name, description, deadline, template_id)
-       VALUES (?, ?, ?, ?, ?)`,
+       (client_id, project_name, description, category, deadline, template_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         req.user.user_id,
         project_name,
         description || null,
+        category || null,
         deadline || null,
         template_id || null,
       ]
@@ -146,6 +152,7 @@ const createProjectRequest = async (req, res) => {
         client_id: req.user.user_id,
         project_name,
         description: description || null,
+        category: category || null,
         deadline: deadline || null,
         template_id: template_id || null,
         status: "pending",
@@ -202,11 +209,12 @@ const approveProjectRequest = async (req, res) => {
 
     const [projectResult] = await connection.query(
       `INSERT INTO projects
-       (name, description, client_id, template_id, start_date, deadline, status, priority, created_by)
-       VALUES (?, ?, ?, ?, CURDATE(), ?, ?, ?, ?)`,
+       (name, description, category, client_id, template_id, start_date, deadline, status, priority, created_by)
+       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?)`,
       [
         request.project_name,
         request.description || null,
+        request.category || null,
         request.client_id,
         request.template_id || null,
         request.deadline || null,
@@ -236,6 +244,7 @@ const approveProjectRequest = async (req, res) => {
         project_id: newProjectId,
         name: request.project_name,
         description: request.description || null,
+        category: request.category || null,
         client_id: request.client_id,
         template_id: request.template_id || null,
         start_date: new Date().toISOString().split("T")[0],

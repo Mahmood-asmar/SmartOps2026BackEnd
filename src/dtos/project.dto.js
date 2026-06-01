@@ -12,6 +12,14 @@ const createProjectDto = z.object({
 
   description: z.string().trim().optional(),
 
+  category: z
+    .string({
+      invalid_type_error: "Category must be a string",
+    })
+    .trim()
+    .max(255, "Category must be less than 255 characters")
+    .optional(),
+
   client_id: z.number().int().positive().nullable().optional(),
 
   template_id: z.number().int().positive().nullable().optional(),
@@ -36,6 +44,12 @@ const updateProjectDto = z.object({
     .optional(),
 
   description: z.string().trim().optional(),
+
+  category: z
+    .string()
+    .trim()
+    .max(255, "Category must be less than 255 characters")
+    .optional(),
 
   client_id: z.number().int().positive().nullable().optional(),
 

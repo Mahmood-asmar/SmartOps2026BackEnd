@@ -7,6 +7,7 @@ const getAllProjects = async (req, res) => {
         p.project_id,
         p.name,
         p.description,
+        p.category,
         p.client_id,
         client.name AS client_name,
         p.template_id,
@@ -49,6 +50,7 @@ const getProjectById = async (req, res) => {
         p.project_id,
         p.name,
         p.description,
+        p.category,
         p.client_id,
         client.name AS client_name,
         p.template_id,
@@ -94,6 +96,7 @@ const createProject = async (req, res) => {
     const {
       name,
       description,
+      category,
       client_id,
       template_id,
       start_date,
@@ -130,11 +133,12 @@ const createProject = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO projects
-       (name, description, client_id, template_id, start_date, deadline, status, priority, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, description, category, client_id, template_id, start_date, deadline, status, priority, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         description || null,
+        category || null,
         client_id || null,
         template_id || null,
         start_date || null,
@@ -151,6 +155,7 @@ const createProject = async (req, res) => {
         project_id: result.insertId,
         name,
         description: description || null,
+        category: category || null,
         client_id: client_id || null,
         template_id: template_id || null,
         start_date: start_date || null,
@@ -188,6 +193,7 @@ const updateProject = async (req, res) => {
     const {
       name,
       description,
+      category,
       client_id,
       template_id,
       start_date,
@@ -227,6 +233,7 @@ const updateProject = async (req, res) => {
 
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
+    if (category !== undefined) updates.category = category;
     if (client_id !== undefined) updates.client_id = client_id;
     if (template_id !== undefined) updates.template_id = template_id;
     if (start_date !== undefined) updates.start_date = start_date;
