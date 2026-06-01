@@ -2,8 +2,8 @@ import db from "../config/db.js";
 
 const getAllProjects = async (req, res) => {
   try {
-    const [projects] = await db.query(`
-      SELECT 
+    let query = `
+      SELECT DISTINCT
         p.project_id,
         p.name,
         p.description,
@@ -23,8 +23,35 @@ const getAllProjects = async (req, res) => {
       LEFT JOIN users client ON p.client_id = client.user_id
       LEFT JOIN project_templates pt ON p.template_id = pt.template_id
       JOIN users creator ON p.created_by = creator.user_id
-      ORDER BY p.created_at DESC
-    `);
+    `;
+
+    const values = [];
+
+    if (req.user.role === "employee") {
+      query += `
+        JOIN tasks t ON t.project_id = p.project_id
+      `;
+    }
+
+    const conditions = [];
+
+    if (req.user.role === "client") {
+      conditions.push("p.client_id = ?");
+      values.push(req.user.user_id);
+    }
+
+    if (req.user.role === "employee") {
+      conditions.push("t.assigned_user = ?");
+      values.push(req.user.user_id);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`;
+    }
+
+    query += ` ORDER BY p.created_at DESC`;
+
+    const [projects] = await db.query(query, values);
 
     return res.json({
       message: "Projects fetched successfully",
