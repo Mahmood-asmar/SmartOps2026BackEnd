@@ -1,30 +1,29 @@
-import {
-  TransactionalEmailsApi,
-  SendSmtpEmail,
-} from "@getbrevo/brevo";
+import axios from "axios";
 
 const sendEmail = async ({ to, subject, text }) => {
-  const emailAPI = new TransactionalEmailsApi();
-
-  emailAPI.authentications.apiKey.apiKey = process.env.BREVO_API_KEY;
-
-  const message = new SendSmtpEmail();
-
-  message.sender = {
-    name: "SmartOps",
-    email: process.env.BREVO_SENDER_EMAIL,
-  };
-
-  message.to = [
+  await axios.post(
+    "https://api.brevo.com/v3/smtp/email",
     {
-      email: to,
+      sender: {
+        name: "SmartOps",
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: [
+        {
+          email: to,
+        },
+      ],
+      subject,
+      textContent: text,
     },
-  ];
-
-  message.subject = subject;
-  message.textContent = text;
-
-  await emailAPI.sendTransacEmail(message);
+    {
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    }
+  );
 };
 
 export default sendEmail;
