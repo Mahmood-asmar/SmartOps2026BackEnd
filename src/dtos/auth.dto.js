@@ -23,7 +23,7 @@ const registerDto = z.object({
       required_error: "Password is required",
       invalid_type_error: "Password must be a string",
     })
-    .min(6, "Password must be at least 6 characters"),
+    .min(8, "Password must be at least 8 characters"),
 
   // Temporary for testing. Later, normal register should always create client only.
  // role: z.enum(["admin", "employee", "client"]).optional(),
@@ -87,7 +87,7 @@ const resetPasswordDto = z.object({
       required_error: "New password is required",
       invalid_type_error: "New password must be a string",
     })
-    .min(6, "New password must be at least 6 characters"),
+    .min(8, "New password must be at least 8 characters"),
 });
 
 export {
