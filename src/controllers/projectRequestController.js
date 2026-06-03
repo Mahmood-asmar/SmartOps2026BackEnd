@@ -1,4 +1,5 @@
 import db from "../config/db.js";
+import createNotification from "../utils/notificationHelper.js";
 
 const getAllProjectRequests = async (req, res) => {
   try {
@@ -152,15 +153,12 @@ const createProjectRequest = async (req, res) => {
     const requestType = template_id ? "using a template" : "as a custom project";
 
     for (const admin of admins) {
-      await db.query(
-        `INSERT INTO notifications (message, type, alert_user)
-         VALUES (?, ?, ?)`,
-        [
-          `New project request submitted by ${req.user.name}: "${project_name}" ${requestType}.`,
-          "project_request_created",
-          admin.user_id,
-        ]
-      );
+      await createNotification({
+        io: req.app.get("io"),
+        message: `New project request submitted by ${req.user.name}: "${project_name}" ${requestType}.`,
+        type: "project_request_created",
+        alert_user: admin.user_id,
+      });
     }
 
     return res.status(201).json({
@@ -189,6 +187,9 @@ const createProjectRequest = async (req, res) => {
 const approveProjectRequest = async (req, res) => {
   const connection = await db.getConnection();
 
+  let request;
+  let newProjectId;
+
   try {
     const { id } = req.params;
 
@@ -207,7 +208,7 @@ const approveProjectRequest = async (req, res) => {
       });
     }
 
-    const request = requests[0];
+    request = requests[0];
 
     if (request.status === "approved") {
       await connection.rollback();
@@ -242,7 +243,7 @@ const approveProjectRequest = async (req, res) => {
       ]
     );
 
-    const newProjectId = projectResult.insertId;
+    newProjectId = projectResult.insertId;
 
     await connection.query(
       `UPDATE project_requests
@@ -254,19 +255,14 @@ const approveProjectRequest = async (req, res) => {
       [req.user.user_id, newProjectId, id]
     );
 
-    await connection.query(
-      `INSERT INTO notifications (message, type, alert_user)
-       VALUES (?, ?, ?)`,
-     [
-       `Your project request "${request.project_name}" has been approved and converted into a project.`,
-       "project_request_approved",
-      request.client_id,
-     ]
-    );
-
-    // Create a notification for the client
-  
     await connection.commit();
+
+    await createNotification({
+      io: req.app.get("io"),
+      message: `Your project request "${request.project_name}" has been approved and converted into a project.`,
+      type: "project_request_approved",
+      alert_user: request.client_id,
+    });
 
     return res.json({
       message: "Project request approved and project created successfully",
@@ -338,15 +334,12 @@ const rejectProjectRequest = async (req, res) => {
       [rejection_reason, req.user.user_id, id]
     );
 
-    await db.query(
-      `INSERT INTO notifications (message, type, alert_user)
-       VALUES (?, ?, ?)`,
-     [
-     `Your project request "${request.project_name}" has been rejected. Reason: ${rejection_reason}`,
-     "project_request_rejected",
-      request.client_id,
-     ]
-    );
+    await createNotification({
+      io: req.app.get("io"),
+      message: `Your project request "${request.project_name}" has been rejected. Reason: ${rejection_reason}`,
+      type: "project_request_rejected",
+      alert_user: request.client_id,
+    });
 
     return res.json({
       message: "Project request rejected successfully",

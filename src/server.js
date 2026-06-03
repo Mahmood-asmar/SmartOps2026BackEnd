@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import http from "http";
+import { Server } from "socket.io";
 
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -10,12 +12,33 @@ import taskRoutes from "./routes/taskRoutes.js";
 import projectRequestRoutes from "./routes/projectRequestRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 
+import setupSocket from "./socket.js";
+
 dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  })
+);
+
 app.use(express.json());
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  },
+});
+
+setupSocket(io);
+
+app.set("io", io);
 
 app.get("/", (req, res) => {
   res.send("Backend is running...");
@@ -31,7 +54,6 @@ app.use("/api/notifications", notificationRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

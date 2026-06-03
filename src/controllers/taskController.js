@@ -1,4 +1,5 @@
 import db from "../config/db.js";
+import createNotification from "../utils/notificationHelper.js";
 
 const getAllTasks = async (req, res) => {
   try {
@@ -148,15 +149,12 @@ const createTask = async (req, res) => {
       ]
     );
 
-    await db.query(
-      `INSERT INTO notifications (message, type, alert_user)
-       VALUES (?, ?, ?)`,
-      [
-        `You have been assigned a new task: "${title}".`,
-        "task_assigned",
-        assigned_user,
-      ]
-    );
+    await createNotification({
+      io: req.app.get("io"),
+      message: `You have been assigned a new task: "${title}".`,
+      type: "task_assigned",
+      alert_user: assigned_user,
+    });
 
     return res.status(201).json({
       message: "Task created successfully",
@@ -322,15 +320,12 @@ const updateTaskStatus = async (req, res) => {
 
       const readableStatus = statusLabels[status] || status;
 
-      await db.query(
-        `INSERT INTO notifications (message, type, alert_user)
-         VALUES (?, ?, ?)`,
-        [
-          `Task "${task.title}" status was updated to ${readableStatus} by ${req.user.name}.`,
-          "task_status_updated",
-          task.project_admin_id,
-        ]
-      );
+      await createNotification({
+        io: req.app.get("io"),
+        message: `Task "${task.title}" status was updated to ${readableStatus} by ${req.user.name}.`,
+        type: "task_status_updated",
+        alert_user: task.project_admin_id,
+      });
     }
 
     return res.json({

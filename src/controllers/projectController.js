@@ -1,4 +1,5 @@
 import db from "../config/db.js";
+import createNotification from "../utils/notificationHelper.js";
 
 const getAllProjects = async (req, res) => {
   try {
@@ -313,15 +314,12 @@ const updateProject = async (req, res) => {
       currentProject.status !== "completed" &&
       currentProject.client_id
     ) {
-      await db.query(
-        `INSERT INTO notifications (message, type, alert_user)
-         VALUES (?, ?, ?)`,
-        [
-          `Your project "${currentProject.name}" has been marked as completed.`,
-          "project_completed",
-          currentProject.client_id,
-        ]
-      );
+      await createNotification({
+        io: req.app.get("io"),
+        message: `Your project "${currentProject.name}" has been marked as completed.`,
+        type: "project_completed",
+        alert_user: currentProject.client_id,
+      });
     }
 
     const [updatedProjects] = await db.query(
