@@ -148,6 +148,16 @@ const createTask = async (req, res) => {
       ]
     );
 
+    await db.query(
+      `INSERT INTO notifications (message, type, alert_user)
+       VALUES (?, ?, ?)`,
+      [
+        `You have been assigned a new task: "${title}".`,
+        "task_assigned",
+        assigned_user,
+      ]
+    );
+
     return res.status(201).json({
       message: "Task created successfully",
       task: {
@@ -247,9 +257,10 @@ const updateTask = async (req, res) => {
 
     await db.query(`UPDATE tasks SET ${setClause} WHERE task_id = ?`, values);
 
-    const [updatedTasks] = await db.query("SELECT * FROM tasks WHERE task_id = ?", [
-      id,
-    ]);
+    const [updatedTasks] = await db.query(
+      "SELECT * FROM tasks WHERE task_id = ?",
+      [id]
+    );
 
     return res.json({
       message: "Task updated successfully",
@@ -270,9 +281,18 @@ const updateTaskStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const [tasks] = await db.query("SELECT * FROM tasks WHERE task_id = ?", [
-      id,
-    ]);
+    const [tasks] = await db.query(
+      `
+      SELECT
+        t.*,
+        p.created_by AS project_admin_id,
+        p.name AS project_name
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.project_id
+      WHERE t.task_id = ?
+      `,
+      [id]
+    );
 
     if (tasks.length === 0) {
       return res.status(404).json({
@@ -292,6 +312,26 @@ const updateTaskStatus = async (req, res) => {
       status,
       id,
     ]);
+
+    if (req.user.role === "employee") {
+      const statusLabels = {
+        pending: "Pending",
+        in_progress: "In Progress",
+        completed: "Completed",
+      };
+
+      const readableStatus = statusLabels[status] || status;
+
+      await db.query(
+        `INSERT INTO notifications (message, type, alert_user)
+         VALUES (?, ?, ?)`,
+        [
+          `Task "${task.title}" status was updated to ${readableStatus} by ${req.user.name}.`,
+          "task_status_updated",
+          task.project_admin_id,
+        ]
+      );
+    }
 
     return res.json({
       message: "Task status updated successfully",
