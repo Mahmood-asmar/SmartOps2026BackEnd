@@ -145,6 +145,24 @@ const createProjectRequest = async (req, res) => {
       ]
     );
 
+    const [admins] = await db.query(
+      "SELECT user_id FROM users WHERE role = 'admin'"
+    );
+
+    const requestType = template_id ? "using a template" : "as a custom project";
+
+    for (const admin of admins) {
+      await db.query(
+        `INSERT INTO notifications (message, type, alert_user)
+         VALUES (?, ?, ?)`,
+        [
+          `New project request submitted by ${req.user.name}: "${project_name}" ${requestType}.`,
+          "project_request_created",
+          admin.user_id,
+        ]
+      );
+    }
+
     return res.status(201).json({
       message: "Project request created successfully",
       request: {
