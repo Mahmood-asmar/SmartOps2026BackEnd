@@ -217,6 +217,8 @@ const updateProject = async (req, res) => {
       });
     }
 
+    const currentProject = projects[0];
+
     const {
       name,
       description,
@@ -282,6 +284,22 @@ const updateProject = async (req, res) => {
     values.push(id);
 
     await db.query(`UPDATE projects SET ${setClause} WHERE project_id = ?`, values);
+
+    if (
+      status === "completed" &&
+      currentProject.status !== "completed" &&
+      currentProject.client_id
+    ) {
+      await db.query(
+        `INSERT INTO notifications (message, type, alert_user)
+         VALUES (?, ?, ?)`,
+        [
+          `Your project "${currentProject.name}" has been marked as completed.`,
+          "project_completed",
+          currentProject.client_id,
+        ]
+      );
+    }
 
     const [updatedProjects] = await db.query(
       "SELECT * FROM projects WHERE project_id = ?",

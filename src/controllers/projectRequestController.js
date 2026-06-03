@@ -236,6 +236,18 @@ const approveProjectRequest = async (req, res) => {
       [req.user.user_id, newProjectId, id]
     );
 
+    await connection.query(
+      `INSERT INTO notifications (message, type, alert_user)
+       VALUES (?, ?, ?)`,
+     [
+       `Your project request "${request.project_name}" has been approved and converted into a project.`,
+       "project_request_approved",
+      request.client_id,
+     ]
+    );
+
+    // Create a notification for the client
+  
     await connection.commit();
 
     return res.json({
@@ -306,6 +318,16 @@ const rejectProjectRequest = async (req, res) => {
            reviewed_at = NOW()
        WHERE request_id = ?`,
       [rejection_reason, req.user.user_id, id]
+    );
+
+    await db.query(
+      `INSERT INTO notifications (message, type, alert_user)
+       VALUES (?, ?, ?)`,
+     [
+     `Your project request "${request.project_name}" has been rejected. Reason: ${rejection_reason}`,
+     "project_request_rejected",
+      request.client_id,
+     ]
     );
 
     return res.json({
