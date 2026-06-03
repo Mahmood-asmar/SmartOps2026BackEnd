@@ -104,9 +104,32 @@ const getProjectById = async (req, res) => {
       });
     }
 
+    const project = projects[0];
+
+    if (req.user.role === "client" && project.client_id !== req.user.user_id) {
+      return res.status(403).json({
+        message: "Access denied, this project does not belong to you",
+      });
+    }
+
+    if (req.user.role === "employee") {
+      const [tasks] = await db.query(
+        `SELECT task_id 
+         FROM tasks 
+         WHERE project_id = ? AND assigned_user = ?`,
+        [id, req.user.user_id]
+      );
+
+      if (tasks.length === 0) {
+        return res.status(403).json({
+          message: "Access denied, you are not assigned to this project",
+        });
+      }
+    }
+
     return res.json({
       message: "Project fetched successfully",
-      project: projects[0],
+      project,
     });
   } catch (error) {
     console.error("Get project by id error:", error);
