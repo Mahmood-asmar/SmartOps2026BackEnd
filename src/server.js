@@ -13,6 +13,8 @@ import projectRequestRoutes from "./routes/projectRequestRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 
 import setupSocket from "./socket.js";
+import aiAnalysisRoutes from "./routes/aiAnalysisRoutes.js";
+
 
 dotenv.config();
 
@@ -51,6 +53,8 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/project-requests", projectRequestRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/ai-analysis", aiAnalysisRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 
