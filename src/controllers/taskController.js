@@ -1,5 +1,7 @@
 import db from "../config/db.js";
 import createNotification from "../utils/notificationHelper.js";
+import runProjectAiAnalysis from "../utils/runProjectAiAnalysis.js";
+
 
 const getAllTasks = async (req, res) => {
   try {
@@ -100,175 +102,264 @@ const getTaskById = async (req, res) => {
   }
 };
 
-const createTask = async (req, res) => {
+export const createTask = async (req, res) => {
   try {
     const {
       title,
       description,
       assigned_user,
+      assignedUser,
       deadline,
       priority,
       status,
       project_id,
+      projectId,
     } = req.body;
 
-    const [employees] = await db.query(
-      "SELECT user_id FROM users WHERE user_id = ? AND role = 'employee'",
-      [assigned_user]
-    );
+    const finalAssignedUser = assigned_user || assignedUser;
+    const finalProjectId = project_id || projectId;
+    const finalPriority = priority || "medium";
+    const finalStatus = status || "pending";
 
-    if (employees.length === 0) {
+    if (!title || !description || !finalAssignedUser || !finalProjectId) {
       return res.status(400).json({
-        message: "Assigned user not found or user is not an employee",
+        message:
+          "Title, description, assigned user, and project id are required.",
       });
     }
 
-    const [projects] = await db.query(
-      "SELECT project_id FROM projects WHERE project_id = ?",
-      [project_id]
+    const [projectRows] = await db.query(
+      `
+      SELECT project_id, name, status
+      FROM projects
+      WHERE project_id = ?
+      `,
+      [finalProjectId]
     );
 
-    if (projects.length === 0) {
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        message: "Project not found.",
+      });
+    }
+
+    const project = projectRows[0];
+
+    if (project.status === "completed" || project.status === "cancelled") {
       return res.status(400).json({
-        message: "Project not found",
+        message: "Cannot assign tasks to completed or cancelled projects.",
+      });
+    }
+
+    const [userRows] = await db.query(
+      `
+      SELECT user_id, name, email, role
+      FROM users
+      WHERE user_id = ?
+      `,
+      [finalAssignedUser]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        message: "Assigned user not found.",
+      });
+    }
+
+    const assignedUserData = userRows[0];
+
+    if (assignedUserData.role !== "employee") {
+      return res.status(400).json({
+        message: "Tasks can only be assigned to employees.",
       });
     }
 
     const [result] = await db.query(
-      `INSERT INTO tasks
-       (title, description, assigned_user, deadline, priority, status, project_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `
+      INSERT INTO tasks (
+        title,
+        description,
+        assigned_user,
+        deadline,
+        priority,
+        status,
+        project_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
       [
         title,
-        description || null,
-        assigned_user,
+        description,
+        finalAssignedUser,
         deadline || null,
-        priority || "medium",
-        status || "pending",
-        project_id,
+        finalPriority,
+        finalStatus,
+        finalProjectId,
       ]
     );
 
-    await createNotification({
-      io: req.app.get("io"),
-      message: `You have been assigned a new task: "${title}".`,
-      type: "task_assigned",
-      alert_user: assigned_user,
-    });
+    const newTask = {
+      task_id: result.insertId,
+      title,
+      description,
+      assigned_user: finalAssignedUser,
+      assigned_user_name: assignedUserData.name,
+      assigned_user_email: assignedUserData.email,
+      deadline: deadline || null,
+      priority: finalPriority,
+      status: finalStatus,
+      project_id: finalProjectId,
+      project_name: project.name,
+    };
+
+    const io = req.app.get("io");
+
+    try {
+      await createNotification({
+        io,
+        message: `You have been assigned a new task "${title}" in project "${project.name}".`,
+        type: "task_assigned",
+        alert_user: finalAssignedUser,
+      });
+    } catch (notificationError) {
+      console.error("Task assigned notification error:", notificationError);
+    }
+
+    let aiAnalysis = null;
+
+    try {
+      aiAnalysis = await runProjectAiAnalysis({
+        projectId: finalProjectId,
+        io,
+        notify: true,
+      });
+    } catch (aiError) {
+      console.error("Auto AI analysis after task creation error:", aiError);
+    }
 
     return res.status(201).json({
-      message: "Task created successfully",
-      task: {
-        task_id: result.insertId,
-        title,
-        description: description || null,
-        assigned_user,
-        deadline: deadline || null,
-        priority: priority || "medium",
-        status: status || "pending",
-        project_id,
-      },
+      message: "Task created successfully.",
+      task: newTask,
+      ai_analysis: aiAnalysis,
     });
   } catch (error) {
     console.error("Create task error:", error);
 
     return res.status(500).json({
-      message: "Failed to create task",
+      message: "Server error while creating task.",
       error: error.message,
     });
   }
 };
 
-const updateTask = async (req, res) => {
+export const updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
+    const { status } = req.body;
 
-    const [tasks] = await db.query("SELECT * FROM tasks WHERE task_id = ?", [
-      id,
-    ]);
+    const allowedStatuses = ["pending", "in_progress", "completed"];
 
-    if (tasks.length === 0) {
-      return res.status(404).json({
-        message: "Task not found",
-      });
-    }
-
-    const {
-      title,
-      description,
-      assigned_user,
-      deadline,
-      priority,
-      status,
-      project_id,
-    } = req.body;
-
-    if (assigned_user !== undefined) {
-      const [employees] = await db.query(
-        "SELECT user_id FROM users WHERE user_id = ? AND role = 'employee'",
-        [assigned_user]
-      );
-
-      if (employees.length === 0) {
-        return res.status(400).json({
-          message: "Assigned user not found or user is not an employee",
-        });
-      }
-    }
-
-    if (project_id !== undefined) {
-      const [projects] = await db.query(
-        "SELECT project_id FROM projects WHERE project_id = ?",
-        [project_id]
-      );
-
-      if (projects.length === 0) {
-        return res.status(400).json({
-          message: "Project not found",
-        });
-      }
-    }
-
-    const updates = {};
-    const values = [];
-
-    if (title !== undefined) updates.title = title;
-    if (description !== undefined) updates.description = description;
-    if (assigned_user !== undefined) updates.assigned_user = assigned_user;
-    if (deadline !== undefined) updates.deadline = deadline;
-    if (priority !== undefined) updates.priority = priority;
-    if (status !== undefined) updates.status = status;
-    if (project_id !== undefined) updates.project_id = project_id;
-
-    const updateFields = Object.keys(updates);
-
-    if (updateFields.length === 0) {
+    if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
-        message: "No fields provided for update",
+        message: "Invalid task status.",
       });
     }
 
-    const setClause = updateFields.map((field) => `${field} = ?`).join(", ");
-
-    updateFields.forEach((field) => values.push(updates[field]));
-    values.push(id);
-
-    await db.query(`UPDATE tasks SET ${setClause} WHERE task_id = ?`, values);
-
-    const [updatedTasks] = await db.query(
-      "SELECT * FROM tasks WHERE task_id = ?",
+    const [taskRows] = await db.query(
+      `
+      SELECT 
+        t.task_id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.deadline,
+        t.project_id,
+        t.assigned_user,
+        p.name AS project_name,
+        p.created_by AS project_created_by
+      FROM tasks t
+      INNER JOIN projects p ON p.project_id = t.project_id
+      WHERE t.task_id = ?
+      `,
       [id]
     );
 
+    if (taskRows.length === 0) {
+      return res.status(404).json({
+        message: "Task not found.",
+      });
+    }
+
+    const task = taskRows[0];
+
+    if (
+      req.user.role === "employee" &&
+      Number(task.assigned_user) !== Number(req.user.user_id)
+    ) {
+      return res.status(403).json({
+        message: "You can only update tasks assigned to you.",
+      });
+    }
+
+    await db.query(
+      `
+      UPDATE tasks
+      SET status = ?
+      WHERE task_id = ?
+      `,
+      [status, id]
+    );
+
+    const updatedTask = {
+      ...task,
+      status,
+    };
+
+    const io = req.app.get("io");
+
+    const formattedStatus = String(status || "")
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+
+    try {
+      if (
+        task.project_created_by &&
+        Number(task.project_created_by) !== Number(req.user.user_id)
+      ) {
+        await createNotification({
+          io,
+          message: `Task "${task.title}" in project "${task.project_name}" was updated to ${formattedStatus}.`,
+          type: "task_status_updated",
+          alert_user: task.project_created_by,
+        });
+      }
+    } catch (notificationError) {
+      console.error("Task status notification error:", notificationError);
+    }
+
+    let aiAnalysis = null;
+
+    try {
+      aiAnalysis = await runProjectAiAnalysis({
+        projectId: task.project_id,
+        io,
+        notify: true,
+      });
+    } catch (aiError) {
+      console.error("Auto AI analysis after task status update error:", aiError);
+    }
+
     return res.json({
-      message: "Task updated successfully",
-      task: updatedTasks[0],
+      message: "Task status updated successfully.",
+      task: updatedTask,
+      ai_analysis: aiAnalysis,
     });
   } catch (error) {
-    console.error("Update task error:", error);
+    console.error("Update task status error:", error);
 
     return res.status(500).json({
-      message: "Failed to update task",
+      message: "Server error while updating task status.",
       error: error.message,
     });
   }
