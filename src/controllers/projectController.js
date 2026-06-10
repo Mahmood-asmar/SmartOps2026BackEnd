@@ -1,5 +1,6 @@
 import db from "../config/db.js";
 import createNotification from "../utils/notificationHelper.js";
+import runProjectAiAnalysis from "../utils/runProjectAiAnalysis.js";
 
 const getAllProjects = async (req, res) => {
   try {
@@ -226,116 +227,174 @@ const createProject = async (req, res) => {
   }
 };
 
-const updateProject = async (req, res) => {
+export const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const [projects] = await db.query(
-      "SELECT * FROM projects WHERE project_id = ?",
-      [id]
-    );
-
-    if (projects.length === 0) {
-      return res.status(404).json({
-        message: "Project not found",
-      });
-    }
-
-    const currentProject = projects[0];
 
     const {
       name,
       description,
-      category,
       client_id,
+      clientId,
       template_id,
+      templateId,
+      category,
       start_date,
+      startDate,
       deadline,
       status,
       priority,
     } = req.body;
 
-    if (client_id !== undefined && client_id !== null) {
-      const [clients] = await db.query(
-        "SELECT user_id FROM users WHERE user_id = ? AND role = 'client'",
-        [client_id]
-      );
+    const finalClientId = client_id ?? clientId;
+    const finalTemplateId = template_id ?? templateId;
+    const finalStartDate = start_date ?? startDate;
 
-      if (clients.length === 0) {
-        return res.status(400).json({
-          message: "Client not found or user is not a client",
-        });
-      }
-    }
+    const allowedStatuses = [
+      "pending",
+      "in_progress",
+      "completed",
+      "cancelled",
+    ];
 
-    if (template_id !== undefined && template_id !== null) {
-      const [templates] = await db.query(
-        "SELECT template_id FROM project_templates WHERE template_id = ?",
-        [template_id]
-      );
+    const allowedPriorities = ["low", "medium", "high"];
 
-      if (templates.length === 0) {
-        return res.status(400).json({
-          message: "Project template not found",
-        });
-      }
-    }
-
-    const updates = {};
-    const values = [];
-
-    if (name !== undefined) updates.name = name;
-    if (description !== undefined) updates.description = description;
-    if (category !== undefined) updates.category = category;
-    if (client_id !== undefined) updates.client_id = client_id;
-    if (template_id !== undefined) updates.template_id = template_id;
-    if (start_date !== undefined) updates.start_date = start_date;
-    if (deadline !== undefined) updates.deadline = deadline;
-    if (status !== undefined) updates.status = status;
-    if (priority !== undefined) updates.priority = priority;
-
-    const updateFields = Object.keys(updates);
-
-    if (updateFields.length === 0) {
+    if (status && !allowedStatuses.includes(status)) {
       return res.status(400).json({
-        message: "No fields provided for update",
+        message: "Invalid project status.",
       });
     }
 
-    const setClause = updateFields.map((field) => `${field} = ?`).join(", ");
-
-    updateFields.forEach((field) => values.push(updates[field]));
-    values.push(id);
-
-    await db.query(`UPDATE projects SET ${setClause} WHERE project_id = ?`, values);
-
-    if (
-      status === "completed" &&
-      currentProject.status !== "completed" &&
-      currentProject.client_id
-    ) {
-      await createNotification({
-        io: req.app.get("io"),
-        message: `Your project "${currentProject.name}" has been marked as completed.`,
-        type: "project_completed",
-        alert_user: currentProject.client_id,
+    if (priority && !allowedPriorities.includes(priority)) {
+      return res.status(400).json({
+        message: "Invalid project priority.",
       });
     }
 
-    const [updatedProjects] = await db.query(
-      "SELECT * FROM projects WHERE project_id = ?",
+    const [projectRows] = await db.query(
+      `
+      SELECT *
+      FROM projects
+      WHERE project_id = ?
+      `,
       [id]
     );
 
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        message: "Project not found.",
+      });
+    }
+
+    const oldProject = projectRows[0];
+
+    const updatedName = name ?? oldProject.name;
+    const updatedDescription = description ?? oldProject.description;
+    const updatedClientId =
+      finalClientId !== undefined ? finalClientId : oldProject.client_id;
+    const updatedTemplateId =
+      finalTemplateId !== undefined ? finalTemplateId : oldProject.template_id;
+    const updatedCategory = category ?? oldProject.category;
+    const updatedStartDate =
+      finalStartDate !== undefined ? finalStartDate : oldProject.start_date;
+    const updatedDeadline =
+      deadline !== undefined ? deadline : oldProject.deadline;
+    const updatedStatus = status ?? oldProject.status;
+    const updatedPriority = priority ?? oldProject.priority;
+
+    await db.query(
+      `
+      UPDATE projects
+      SET
+        name = ?,
+        description = ?,
+        client_id = ?,
+        template_id = ?,
+        category = ?,
+        start_date = ?,
+        deadline = ?,
+        status = ?,
+        priority = ?
+      WHERE project_id = ?
+      `,
+      [
+        updatedName,
+        updatedDescription,
+        updatedClientId || null,
+        updatedTemplateId || null,
+        updatedCategory,
+        updatedStartDate || null,
+        updatedDeadline || null,
+        updatedStatus,
+        updatedPriority,
+        id,
+      ]
+    );
+
+    const [updatedProjectRows] = await db.query(
+      `
+      SELECT 
+        p.*,
+        c.name AS client_name,
+        creator.name AS created_by_name,
+        pt.name AS template_name
+      FROM projects p
+      LEFT JOIN users c ON c.user_id = p.client_id
+      LEFT JOIN users creator ON creator.user_id = p.created_by
+      LEFT JOIN project_templates pt ON pt.template_id = p.template_id
+      WHERE p.project_id = ?
+      `,
+      [id]
+    );
+
+    const updatedProject = updatedProjectRows[0];
+
+    const io = req.app.get("io");
+
+    const statusChanged = oldProject.status !== updatedStatus;
+    const priorityChanged = oldProject.priority !== updatedPriority;
+
+    if (
+      statusChanged &&
+      updatedStatus === "completed" &&
+      updatedProject.client_id
+    ) {
+      try {
+        await createNotification({
+          io,
+          message: `Project "${updatedProject.name}" has been completed.`,
+          type: "project_completed",
+          alert_user: updatedProject.client_id,
+        });
+      } catch (notificationError) {
+        console.error("Project completed notification error:", notificationError);
+      }
+    }
+
+    let aiAnalysis = null;
+
+    if (statusChanged || priorityChanged) {
+      try {
+        aiAnalysis = await runProjectAiAnalysis({
+          projectId: updatedProject.project_id,
+          io,
+          notify: true,
+        });
+      } catch (aiError) {
+        console.error("Auto AI analysis after project update error:", aiError);
+      }
+    }
+
     return res.json({
-      message: "Project updated successfully",
-      project: updatedProjects[0],
+      message: "Project updated successfully.",
+      project: updatedProject,
+      ai_analysis: aiAnalysis,
     });
   } catch (error) {
     console.error("Update project error:", error);
 
     return res.status(500).json({
-      message: "Failed to update project",
+      message: "Server error while updating project.",
       error: error.message,
     });
   }
