@@ -108,7 +108,10 @@ const getProjectById = async (req, res) => {
 
     const project = projects[0];
 
-    if (req.user.role === "client" && project.client_id !== req.user.user_id) {
+    if (
+      req.user.role === "client" &&
+      Number(project.client_id) !== Number(req.user.user_id)
+    ) {
       return res.status(403).json({
         message: "Access denied, this project does not belong to you",
       });
@@ -116,9 +119,11 @@ const getProjectById = async (req, res) => {
 
     if (req.user.role === "employee") {
       const [tasks] = await db.query(
-        `SELECT task_id 
-         FROM tasks 
-         WHERE project_id = ? AND assigned_user = ?`,
+        `
+        SELECT task_id 
+        FROM tasks 
+        WHERE project_id = ? AND assigned_user = ?
+        `,
         [id, req.user.user_id]
       );
 
@@ -184,9 +189,11 @@ const createProject = async (req, res) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO projects
-       (name, description, category, client_id, template_id, start_date, deadline, status, priority, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `
+      INSERT INTO projects
+      (name, description, category, client_id, template_id, start_date, deadline, status, priority, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
       [
         name,
         description || null,
@@ -227,7 +234,7 @@ const createProject = async (req, res) => {
   }
 };
 
-export const updateProject = async (req, res) => {
+const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -353,6 +360,8 @@ export const updateProject = async (req, res) => {
 
     const statusChanged = oldProject.status !== updatedStatus;
     const priorityChanged = oldProject.priority !== updatedPriority;
+    const deadlineChanged =
+      String(oldProject.deadline || "") !== String(updatedDeadline || "");
 
     if (
       statusChanged &&
@@ -373,7 +382,7 @@ export const updateProject = async (req, res) => {
 
     let aiAnalysis = null;
 
-    if (statusChanged || priorityChanged) {
+    if (statusChanged || priorityChanged || deadlineChanged) {
       try {
         aiAnalysis = await runProjectAiAnalysis({
           projectId: updatedProject.project_id,

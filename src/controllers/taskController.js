@@ -2,7 +2,6 @@ import db from "../config/db.js";
 import createNotification from "../utils/notificationHelper.js";
 import runProjectAiAnalysis from "../utils/runProjectAiAnalysis.js";
 
-
 const getAllTasks = async (req, res) => {
   try {
     let query = `
@@ -12,6 +11,7 @@ const getAllTasks = async (req, res) => {
         t.description,
         t.assigned_user,
         assigned.name AS assigned_user_name,
+        assigned.email AS assigned_user_email,
         t.deadline,
         t.priority,
         t.status,
@@ -60,6 +60,7 @@ const getTaskById = async (req, res) => {
         t.description,
         t.assigned_user,
         assigned.name AS assigned_user_name,
+        assigned.email AS assigned_user_email,
         t.deadline,
         t.priority,
         t.status,
@@ -82,7 +83,10 @@ const getTaskById = async (req, res) => {
 
     const task = tasks[0];
 
-    if (req.user.role === "employee" && task.assigned_user !== req.user.user_id) {
+    if (
+      req.user.role === "employee" &&
+      Number(task.assigned_user) !== Number(req.user.user_id)
+    ) {
       return res.status(403).json({
         message: "Access denied, this task is not assigned to you",
       });
@@ -102,7 +106,7 @@ const getTaskById = async (req, res) => {
   }
 };
 
-export const createTask = async (req, res) => {
+const createTask = async (req, res) => {
   try {
     const {
       title,
@@ -252,7 +256,7 @@ export const createTask = async (req, res) => {
   }
 };
 
-export const updateTaskStatus = async (req, res) => {
+const updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -365,7 +369,7 @@ export const updateTaskStatus = async (req, res) => {
   }
 };
 
-export const updateTask = async (req, res) => {
+const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -414,52 +418,48 @@ export const updateTask = async (req, res) => {
     const newProjectId = finalProjectId || oldTask.project_id;
     const newAssignedUser = finalAssignedUser || oldTask.assigned_user;
 
-    if (newProjectId) {
-      const [projectRows] = await db.query(
-        `
-        SELECT project_id, name, status
-        FROM projects
-        WHERE project_id = ?
-        `,
-        [newProjectId]
-      );
+    const [projectRows] = await db.query(
+      `
+      SELECT project_id, name, status
+      FROM projects
+      WHERE project_id = ?
+      `,
+      [newProjectId]
+    );
 
-      if (projectRows.length === 0) {
-        return res.status(404).json({
-          message: "Project not found.",
-        });
-      }
-
-      const project = projectRows[0];
-
-      if (project.status === "completed" || project.status === "cancelled") {
-        return res.status(400).json({
-          message: "Cannot assign tasks to completed or cancelled projects.",
-        });
-      }
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        message: "Project not found.",
+      });
     }
 
-    if (newAssignedUser) {
-      const [userRows] = await db.query(
-        `
-        SELECT user_id, name, email, role
-        FROM users
-        WHERE user_id = ?
-        `,
-        [newAssignedUser]
-      );
+    const project = projectRows[0];
 
-      if (userRows.length === 0) {
-        return res.status(404).json({
-          message: "Assigned user not found.",
-        });
-      }
+    if (project.status === "completed" || project.status === "cancelled") {
+      return res.status(400).json({
+        message: "Cannot assign tasks to completed or cancelled projects.",
+      });
+    }
 
-      if (userRows[0].role !== "employee") {
-        return res.status(400).json({
-          message: "Tasks can only be assigned to employees.",
-        });
-      }
+    const [userRows] = await db.query(
+      `
+      SELECT user_id, name, email, role
+      FROM users
+      WHERE user_id = ?
+      `,
+      [newAssignedUser]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        message: "Assigned user not found.",
+      });
+    }
+
+    if (userRows[0].role !== "employee") {
+      return res.status(400).json({
+        message: "Tasks can only be assigned to employees.",
+      });
     }
 
     const updatedTitle = title ?? oldTask.title;
@@ -570,7 +570,7 @@ export const updateTask = async (req, res) => {
   }
 };
 
-export const deleteTask = async (req, res) => {
+const deleteTask = async (req, res) => {
   try {
     const { id } = req.params;
 
