@@ -108,6 +108,6 @@ The backend is deployed on Railway and connected to a MySQL database, allowing s
 ## Authors
 
 Mahmood Asmar
-[Partner Name]
+yousef hanna
 
 Graduation Project – Computer Engineering
